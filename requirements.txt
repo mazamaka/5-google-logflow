@@ -1,0 +1,10 @@
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.23
+gunicorn>=21.2
+SQLAlchemy>=2.0
+asyncpg>=0.28
+alembic>=1.12
+pydantic>=2.6
+pydantic-settings>=2.2
+minio>=7.2
+python-dotenv>=1.0
