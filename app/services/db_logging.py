@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.automation_run import AutomationRun
 from app.models.log import Log
 from app.schemas.batch import BatchRequest, LogEntry
+from app.core.logging_config import logger
 
 
 async def upsert_automation_run(
@@ -20,6 +21,9 @@ async def upsert_automation_run(
     profile_id: str | None,
     action_name: str,
 ) -> None:
+    logger.debug(
+        f"[db] upsert automation_run run_id={run_id} task_id={task_id} profile_id={profile_id} action={action_name}"
+    )
     stmt = (
         pg_insert(AutomationRun)
         .values(
@@ -38,6 +42,7 @@ async def upsert_automation_run(
         )
     )
     await session.execute(stmt)
+    logger.debug(f"[db] upsert automation_run done run_id={run_id}")
 
 
 def _prepare_rows(run_id: str, entries: Iterable[LogEntry]) -> list[dict]:
@@ -61,20 +66,31 @@ def _prepare_rows(run_id: str, entries: Iterable[LogEntry]) -> list[dict]:
 async def insert_logs(session: AsyncSession, run_id: str, entries: Iterable[LogEntry]) -> int:
     rows = _prepare_rows(run_id, entries)
     if not rows:
+        logger.debug(f"[db] no logs to insert for run_id={run_id}")
         return 0
     stmt = insert(Log).values(rows)
     await session.execute(stmt)
+    logger.debug(f"[db] inserted {len(rows)} log rows for run_id={run_id}")
     return len(rows)
 
 
 async def process_batch(session: AsyncSession, req: BatchRequest) -> int:
-    await upsert_automation_run(
-        session,
-        run_id=req.run_id,
-        task_id=req.task_id,
-        profile_id=req.profile_id,
-        action_name=req.action_name,
+    logger.info(
+        f"[api/db] processing batch run_id={req.run_id} task_id={req.task_id} action={req.action_name} logs={len(req.logs)}"
     )
-    count = await insert_logs(session, req.run_id, req.logs)
-    await session.commit()
-    return count
+    try:
+        await upsert_automation_run(
+            session,
+            run_id=req.run_id,
+            task_id=req.task_id,
+            profile_id=req.profile_id,
+            action_name=req.action_name,
+        )
+        count = await insert_logs(session, req.run_id, req.logs)
+        await session.commit()
+        logger.info(f"[api/db] batch stored run_id={req.run_id} inserted={count}")
+        return count
+    except Exception:
+        logger.exception(f"[api/db] failed to process batch run_id={req.run_id}")
+        await session.rollback()
+        raise

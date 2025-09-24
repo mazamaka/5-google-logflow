@@ -12,6 +12,7 @@ from app.schemas.automation_run import AutomationRunRead
 from app.models.log import Log
 from app.schemas.log_read import LogRead
 from app.schemas.enums import LogLevel
+from app.core.logging_config import logger
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -28,6 +29,9 @@ async def list_runs(
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[AutomationRunRead]:
+    logger.info(
+        f"[api] GET /api/v1/runs task_id={task_id} profile_id={profile_id} action_name={action_name} status={status}"
+    )
     stmt: Select[tuple[AutomationRun]] = select(AutomationRun)
 
     conditions = []
@@ -51,13 +55,16 @@ async def list_runs(
 
     result = await session.execute(stmt)
     rows = result.scalars().all()
+    logger.debug(f"[api] /runs -> {len(rows)} items")
     return rows
 
 
 @router.get("/{run_id}", response_model=AutomationRunRead)
 async def get_run(run_id: str, session: AsyncSession = Depends(get_db_session)) -> AutomationRunRead:
+    logger.info(f"[api] GET /api/v1/runs/{run_id}")
     obj = await session.get(AutomationRun, run_id)
     if not obj:
+        logger.warning(f"[api] run not found run_id={run_id}")
         raise HTTPException(status_code=404, detail="Запуск не найден")
     return obj
 
@@ -72,6 +79,9 @@ async def get_run_logs(
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[LogRead]:
+    logger.info(
+        f"[api] GET /api/v1/runs/{run_id}/logs level={level} start_time={start_time} end_time={end_time} limit={limit} offset={offset}"
+    )
     stmt: Select[tuple[Log]] = select(Log).where(Log.run_id == run_id)
     if level is not None:
         stmt = stmt.where(Log.level == level.value)
@@ -82,4 +92,6 @@ async def get_run_logs(
     stmt = stmt.order_by(Log.timestamp.asc()).offset(offset).limit(limit)
 
     result = await session.execute(stmt)
-    return result.scalars().all()
+    rows = result.scalars().all()
+    logger.debug(f"[api] /runs/{run_id}/logs -> {len(rows)} items")
+    return rows

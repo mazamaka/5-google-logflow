@@ -9,6 +9,7 @@ from minio import Minio
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.core.logging_config import logger
 
 
 class MinioService:
@@ -21,6 +22,7 @@ class MinioService:
             secret_key=settings.minio_secret_key,
             secure=bool(settings.minio_secure),
         )
+        logger.info(f"[minio] configured endpoint={endpoint} bucket={self._bucket}")
 
     @property
     def bucket(self) -> str:
@@ -29,6 +31,9 @@ class MinioService:
     def ensure_bucket(self) -> None:
         if not self._client.bucket_exists(self._bucket):
             self._client.make_bucket(self._bucket)
+            logger.info(f"[minio] bucket created: {self._bucket}")
+        else:
+            logger.debug(f"[minio] bucket already exists: {self._bucket}")
 
     async def ensure_bucket_async(self) -> None:
         await run_in_threadpool(self.ensure_bucket)
@@ -36,6 +41,7 @@ class MinioService:
     def upload_json(self, object_name: str, data: dict[str, Any]) -> str:
         raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
         stream = io.BytesIO(raw)
+        logger.debug(f"[minio] uploading object {object_name} (len={len(raw)}) to bucket={self._bucket}")
         self._client.put_object(
             bucket_name=self._bucket,
             object_name=object_name,
@@ -43,6 +49,7 @@ class MinioService:
             length=len(raw),
             content_type="application/json",
         )
+        logger.debug(f"[minio] uploaded object {object_name}")
         return object_name
 
     async def upload_json_async(self, object_name: str, data: dict[str, Any]) -> str:
