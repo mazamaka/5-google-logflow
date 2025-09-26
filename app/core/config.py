@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     database_url: Optional[str] = None  # Если задана, используется как есть
 
     # MinIO
-    minio_endpoint: str = "minio:9000"  # host:port
+    minio_endpoint_host: str = "minio"
+    minio_endpoint_port: int = 9000
     minio_access_key: str = "minio"
     minio_secret_key: str = "minio12345"
     minio_secure: bool = False
@@ -56,16 +57,11 @@ class Settings(BaseSettings):
     @property
     def minio_endpoint_effective(self) -> str:
         """Корректный endpoint MinIO вида host:port с учётом среды."""
-        endpoint = self.minio_endpoint
+        endpoint_host = self.minio_endpoint_host
+        endpoint_port = self.minio_endpoint_port
         if self.is_running_in_docker():
-            return endpoint
-        # Локально: если оставили контейнерное имя, подменим на localhost
-        host, sep, port = endpoint.partition(":")
-        if host in {"minio"}:
-            host = "localhost"
-        if not sep:
-            port = "9000"
-        return f"{host}:{port}"
+            return f"{endpoint_host}:{endpoint_port}"
+        return f"localhost:{endpoint_port}"
 
     @property
     def postgres_port_effective(self) -> int:
