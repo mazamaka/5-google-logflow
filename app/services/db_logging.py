@@ -20,10 +20,19 @@ async def upsert_automation_run(
     task_id: str,
     profile_id: str | None,
     action_name: str,
+    task_data: dict | None,
+    update_task_data: bool = True,
 ) -> None:
     logger.debug(
-        f"[db] upsert automation_run run_id={run_id} task_id={task_id} profile_id={profile_id} action={action_name}"
+        f"[db] upsert automation_run run_id={run_id} task_id={task_id} profile_id={profile_id} action={action_name} update_task_data={update_task_data}"
     )
+    update_fields = {
+        "task_id": task_id,
+        "profile_id": profile_id,
+        "action_name": action_name,
+    }
+    if update_task_data:
+        update_fields["task_data"] = task_data
     stmt = (
         pg_insert(AutomationRun)
         .values(
@@ -31,14 +40,11 @@ async def upsert_automation_run(
             task_id=task_id,
             profile_id=profile_id,
             action_name=action_name,
+            task_data=task_data,
         )
         .on_conflict_do_update(
             index_elements=[AutomationRun.run_id],
-            set_={
-                "task_id": task_id,
-                "profile_id": profile_id,
-                "action_name": action_name,
-            },
+            set_=update_fields,
         )
     )
     await session.execute(stmt)
@@ -79,12 +85,15 @@ async def process_batch(session: AsyncSession, req: BatchRequest) -> int:
         f"[api/db] processing batch run_id={req.run_id} task_id={req.task_id} action={req.action_name} logs={len(req.logs)}"
     )
     try:
+        update_task_data = "task_data" in req.model_fields_set
         await upsert_automation_run(
             session,
             run_id=req.run_id,
             task_id=req.task_id,
             profile_id=req.profile_id,
             action_name=req.action_name,
+            task_data=req.task_data,
+            update_task_data=update_task_data,
         )
         count = await insert_logs(session, req.run_id, req.logs)
         await session.commit()

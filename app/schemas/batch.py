@@ -19,4 +19,5 @@ class BatchRequest(BaseModel):
     task_id: str
     profile_id: str
     action_name: str
+    task_data: Dict[str, Any] | None = None
     logs: List[LogEntry]
