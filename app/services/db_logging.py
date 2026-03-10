@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import timezone
-from typing import Iterable
 
 from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging_config import logger
 from app.models.automation_run import AutomationRun
 from app.models.log import Log
 from app.schemas.batch import BatchRequest, LogEntry
-from app.core.logging_config import logger
 
 
 async def upsert_automation_run(
@@ -23,10 +23,12 @@ async def upsert_automation_run(
     task_data: dict | None,
     update_task_data: bool = True,
 ) -> None:
+    """Insert or update automation run record."""
     logger.debug(
-        f"[db] upsert automation_run run_id={run_id} task_id={task_id} profile_id={profile_id} action={action_name} update_task_data={update_task_data}"
+        "[db] upsert automation_run run_id={} task_id={} action={}",
+        run_id, task_id, action_name,
     )
-    update_fields = {
+    update_fields: dict[str, object] = {
         "task_id": task_id,
         "profile_id": profile_id,
         "action_name": action_name,
@@ -48,7 +50,6 @@ async def upsert_automation_run(
         )
     )
     await session.execute(stmt)
-    logger.debug(f"[db] upsert automation_run done run_id={run_id}")
 
 
 def _prepare_rows(run_id: str, entries: Iterable[LogEntry]) -> list[dict]:
@@ -70,19 +71,21 @@ def _prepare_rows(run_id: str, entries: Iterable[LogEntry]) -> list[dict]:
 
 
 async def insert_logs(session: AsyncSession, run_id: str, entries: Iterable[LogEntry]) -> int:
+    """Bulk insert log entries for a given run."""
     rows = _prepare_rows(run_id, entries)
     if not rows:
-        logger.debug(f"[db] no logs to insert for run_id={run_id}")
         return 0
     stmt = insert(Log).values(rows)
     await session.execute(stmt)
-    logger.debug(f"[db] inserted {len(rows)} log rows for run_id={run_id}")
+    logger.debug("[db] inserted {} log rows for run_id={}", len(rows), run_id)
     return len(rows)
 
 
 async def process_batch(session: AsyncSession, req: BatchRequest) -> int:
+    """Process a batch of logs: upsert run, insert logs, commit."""
     logger.info(
-        f"[api/db] processing batch run_id={req.run_id} task_id={req.task_id} action={req.action_name} logs={len(req.logs)}"
+        "[batch] run_id={} task_id={} action={} logs={}",
+        req.run_id, req.task_id, req.action_name, len(req.logs),
     )
     try:
         update_task_data = "task_data" in req.model_fields_set
@@ -97,9 +100,9 @@ async def process_batch(session: AsyncSession, req: BatchRequest) -> int:
         )
         count = await insert_logs(session, req.run_id, req.logs)
         await session.commit()
-        logger.info(f"[api/db] batch stored run_id={req.run_id} inserted={count}")
+        logger.info("[batch] stored run_id={} inserted={}", req.run_id, count)
         return count
     except Exception:
-        logger.exception(f"[api/db] failed to process batch run_id={req.run_id}")
+        logger.exception("[batch] failed run_id={}", req.run_id)
         await session.rollback()
         raise

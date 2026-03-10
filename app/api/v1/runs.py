@@ -7,12 +7,12 @@ from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session
-from app.models.automation_run import AutomationRun
-from app.schemas.automation_run import AutomationRunRead
-from app.models.log import Log
-from app.schemas.log_read import LogRead
-from app.schemas.enums import LogLevel
 from app.core.logging_config import logger
+from app.models.automation_run import AutomationRun
+from app.models.log import Log
+from app.schemas.automation_run import AutomationRunRead
+from app.schemas.enums import LogLevel
+from app.schemas.log_read import LogRead
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -29,9 +29,7 @@ async def list_runs(
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[AutomationRunRead]:
-    logger.info(
-        f"[api] GET /api/v1/runs task_id={task_id} profile_id={profile_id} action_name={action_name} status={status}"
-    )
+    """List automation runs with optional filters."""
     stmt: Select[tuple[AutomationRun]] = select(AutomationRun)
 
     conditions = []
@@ -55,33 +53,33 @@ async def list_runs(
 
     result = await session.execute(stmt)
     rows = result.scalars().all()
-    logger.debug(f"[api] /runs -> {len(rows)} items")
+    logger.debug("[api] /runs -> {} items", len(rows))
     return rows
 
 
 @router.get("/{run_id}", response_model=AutomationRunRead)
-async def get_run(run_id: str, session: AsyncSession = Depends(get_db_session)) -> AutomationRunRead:
-    logger.info(f"[api] GET /api/v1/runs/{run_id}")
+async def get_run(
+    run_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> AutomationRunRead:
+    """Get a single automation run by ID."""
     obj = await session.get(AutomationRun, run_id)
     if not obj:
-        logger.warning(f"[api] run not found run_id={run_id}")
-        raise HTTPException(status_code=404, detail="Запуск не найден")
+        raise HTTPException(status_code=404, detail="Run not found")
     return obj
 
 
 @router.get("/{run_id}/logs", response_model=list[LogRead])
 async def get_run_logs(
     run_id: str,
-    level: LogLevel | None = Query(default=None, description="Фильтр по уровню"),
-    start_time: datetime | None = Query(default=None, description="Начало интервала (ISO8601)"),
-    end_time: datetime | None = Query(default=None, description="Конец интервала (ISO8601)"),
+    level: LogLevel | None = Query(default=None, description="Filter by log level"),
+    start_time: datetime | None = Query(default=None, description="Start of time range (ISO 8601)"),
+    end_time: datetime | None = Query(default=None, description="End of time range (ISO 8601)"),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[LogRead]:
-    logger.info(
-        f"[api] GET /api/v1/runs/{run_id}/logs level={level} start_time={start_time} end_time={end_time} limit={limit} offset={offset}"
-    )
+    """Get log entries for a specific automation run."""
     stmt: Select[tuple[Log]] = select(Log).where(Log.run_id == run_id)
     if level is not None:
         stmt = stmt.where(Log.level == level.value)
@@ -93,5 +91,5 @@ async def get_run_logs(
 
     result = await session.execute(stmt)
     rows = result.scalars().all()
-    logger.debug(f"[api] /runs/{run_id}/logs -> {len(rows)} items")
+    logger.debug("[api] /runs/{}/logs -> {} items", run_id, len(rows))
     return rows

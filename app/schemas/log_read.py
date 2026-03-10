@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,4 +16,4 @@ class LogRead(BaseModel):
     timestamp: datetime
     level: LogLevel
     message: str | None = None
-    data: Dict[str, Any]
+    data: dict[str, Any]

@@ -1,10 +1,13 @@
-from typing import Optional
+from __future__ import annotations
+
 import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
     # App
     app_name: str = "logflow"
     intercept_handler_logging: bool = True
@@ -16,7 +19,7 @@ class Settings(BaseSettings):
     postgres_db: str = "logs"
     postgres_host: str = "db"
     postgres_port: int = 5432
-    database_url: Optional[str] = None  # Если задана, используется как есть
+    database_url: str | None = None
 
     # MinIO
     minio_endpoint_host: str = "minio"
@@ -41,22 +44,21 @@ class Settings(BaseSettings):
 
     @staticmethod
     def is_running_in_docker() -> bool:
-        """Проверяет, запущено ли приложение в Docker-контейнере."""
+        """Check if running inside Docker container."""
         return os.path.exists("/.dockerenv")
 
     @property
     def postgres_host_effective(self) -> str:
-        """Корректный host БД с учётом среды (docker/локально)."""
+        """Effective DB host (auto-detects Docker vs local)."""
         if self.is_running_in_docker():
             return self.postgres_host
-        # При локальном запуске, если host остался контейнерным значением, подменим на localhost
         if self.postgres_host in {"db", "postgres"}:
             return "localhost"
         return self.postgres_host
 
     @property
     def minio_endpoint_effective(self) -> str:
-        """Корректный endpoint MinIO вида host:port с учётом среды."""
+        """Effective MinIO endpoint host:port."""
         endpoint_host = self.minio_endpoint_host
         endpoint_port = self.minio_endpoint_port
         if self.is_running_in_docker():
@@ -65,7 +67,7 @@ class Settings(BaseSettings):
 
     @property
     def postgres_port_effective(self) -> int:
-        """Корректный порт БД с учётом среды (в Docker всегда внутренний 5432)."""
+        """Effective DB port (always 5432 inside Docker)."""
         if self.is_running_in_docker():
             return 5432
         return self.postgres_port

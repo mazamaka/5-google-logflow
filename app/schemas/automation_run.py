@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -14,5 +14,5 @@ class AutomationRunRead(BaseModel):
     profile_id: str | None = None
     action_name: str
     status: str
-    task_data: Dict[str, Any] | None = None
+    task_data: dict[str, Any] | None = None
     start_time: datetime
